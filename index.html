@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Ward Remembers</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="game-shell">
+    <section class="story-panel" aria-live="polite">
+      <div class="terminal-bar">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+
+      <div class="character-stage">
+        <div class="sprite-frame">
+          <img id="characterSprite" class="character-sprite is-hidden" src="" alt="">
+          <div class="pixel-placeholder" id="pixelPlaceholder" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+        <div class="character-card">
+          <p class="speaker-label">Observed Subject</p>
+          <p id="characterName">Patient 09</p>
+        </div>
+      </div>
+
+      <div class="scene-art" aria-hidden="true">
+        <pre id="sceneArt"></pre>
+      </div>
+
+      <p class="chapter" id="chapterLabel"></p>
+      <h1 id="sceneTitle"></h1>
+      <p class="story-text" id="storyText"></p>
+
+      <div class="choices" id="choices"></div>
+    </section>
+
+    <aside class="status-panel">
+      <h2>Patient Log</h2>
+      <dl>
+        <div>
+          <dt>Nerve</dt>
+          <dd><span id="powerValue">3</span></dd>
+        </div>
+        <div>
+          <dt>Doubt</dt>
+          <dd><span id="trustValue">1</span></dd>
+        </div>
+        <div>
+          <dt>Fragments</dt>
+          <dd><span id="clueValue">0</span></dd>
+        </div>
+      </dl>
+
+      <h2>Path</h2>
+      <ol id="historyList"></ol>
+
+      <button class="reset-button" id="resetButton" type="button">Restart</button>
+    </aside>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
