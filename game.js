@@ -351,6 +351,8 @@ const state = {
   power: 3,
   trust: 1,
   clue: 0,
+  insanity: 0,
+  intel: 1,
   history: [],
 };
 
@@ -365,8 +367,16 @@ const choices = document.querySelector("#choices");
 const powerValue = document.querySelector("#powerValue");
 const trustValue = document.querySelector("#trustValue");
 const clueValue = document.querySelector("#clueValue");
+const insanityValue = document.querySelector("#insanityValue");
+const intelValue = document.querySelector("#intelValue");
 const historyList = document.querySelector("#historyList");
 const resetButton = document.querySelector("#resetButton");
+const locationLabel = document.querySelector("#locationLabel");
+const sceneCounter = document.querySelector("#sceneCounter");
+const doorButton = document.querySelector("#doorButton");
+const interactionPrompt = document.querySelector("#interactionPrompt");
+const fpsCounter = document.querySelector("#fpsCounter");
+const timeDisplay = document.querySelector("#timeDisplay");
 
 function renderScene() {
   const scene = scenes[state.currentScene];
@@ -375,18 +385,23 @@ function renderScene() {
   sceneTitle.textContent = scene.title;
   sceneArt.textContent = scene.art.trim();
   characterName.textContent = scene.characterName || "Patient 09";
+  locationLabel.textContent = getLocationLabel(scene);
+  sceneCounter.textContent = String(Object.keys(scenes).indexOf(state.currentScene) + 1).padStart(2, "0");
   renderCharacter(scene);
   storyText.textContent = getSceneText(scene);
 
   powerValue.textContent = state.power;
   trustValue.textContent = state.trust;
   clueValue.textContent = state.clue;
+  insanityValue.textContent = state.insanity;
+  intelValue.textContent = state.intel;
 
   historyList.innerHTML = state.history
     .map((item) => `<li>${item}</li>`)
     .join("");
 
   choices.innerHTML = "";
+  updateDoorPrompt(scene);
 
   if (scene.ending) {
     const endingButton = document.createElement("button");
@@ -406,6 +421,33 @@ function renderScene() {
     button.addEventListener("click", () => choosePath(choice));
     choices.append(button);
   });
+}
+
+function updateDoorPrompt(scene) {
+  const firstChoice = scene.choices[0];
+
+  if (!firstChoice) {
+    interactionPrompt.innerHTML = "<span></span><p>Press <strong>Enter</strong><br>to begin again</p>";
+    doorButton.setAttribute("aria-label", "Begin again");
+    return;
+  }
+
+  interactionPrompt.innerHTML = `<span></span><p>${firstChoice.label}<br>Press <strong>Enter</strong></p>`;
+  doorButton.setAttribute("aria-label", firstChoice.label);
+}
+
+function getLocationLabel(scene) {
+  const cleanChapter = scene.chapter.replace("Session ", "Floor ");
+
+  if (scene.chapter === "Ending") {
+    return "Discharge corridor";
+  }
+
+  if (scene.chapter === "Final Session") {
+    return "Lower ward treatment room";
+  }
+
+  return `${cleanChapter}, ${scene.title}`;
 }
 
 function renderCharacter(scene) {
@@ -450,6 +492,8 @@ function applyEffects(effects = {}) {
   state.power = Math.max(0, state.power + (effects.power || 0));
   state.trust = Math.max(0, state.trust + (effects.trust || 0));
   state.clue = Math.max(0, state.clue + (effects.clue || 0));
+  state.insanity = Math.max(0, state.insanity + (effects.insanity || 0));
+  state.intel = Math.max(0, state.intel + (effects.intel || 0));
 }
 
 function resetGame() {
@@ -457,9 +501,65 @@ function resetGame() {
   state.power = 3;
   state.trust = 1;
   state.clue = 0;
+  state.insanity = 0;
+  state.intel = 1;
   state.history = [];
   renderScene();
 }
 
 resetButton.addEventListener("click", resetGame);
+doorButton.addEventListener("click", activatePrimaryAction);
+document.addEventListener("keydown", (event) => {
+  const focusedButton = event.target instanceof HTMLElement && event.target.closest("button");
+
+  if (event.key === "Enter" && !focusedButton) {
+    event.preventDefault();
+    activatePrimaryAction();
+  }
+});
+
+function activatePrimaryAction() {
+  const scene = scenes[state.currentScene];
+  const firstChoice = scene.choices[0];
+
+  if (firstChoice) {
+    choosePath(firstChoice);
+    return;
+  }
+
+  resetGame();
+}
+
 renderScene();
+
+// FPS Counter
+let frameCount = 0;
+let lastTime = performance.now();
+
+function updateFPS() {
+  const currentTime = performance.now();
+  frameCount++;
+
+  if (currentTime - lastTime >= 1000) {
+    fpsCounter.textContent = `${frameCount} FPS`;
+    frameCount = 0;
+    lastTime = currentTime;
+  }
+
+  requestAnimationFrame(updateFPS);
+}
+
+requestAnimationFrame(updateFPS);
+
+// Time Display
+function updateTime() {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  timeDisplay.textContent = `${displayHours}:${minutes} ${ampm}`;
+}
+
+updateTime();
+setInterval(updateTime, 60000);

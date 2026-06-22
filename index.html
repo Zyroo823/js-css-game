@@ -8,57 +8,134 @@
 </head>
 <body>
   <main class="game-shell">
-    <section class="story-panel" aria-live="polite">
-      <div class="terminal-bar">
-        <span></span>
-        <span></span>
-        <span></span>
+    <section class="game-screen" aria-live="polite">
+      <div class="top-hud">
+        <div class="hud-chip hud-chip-large">
+          <span class="hud-kicker">Map</span>
+          <strong id="chapterLabel"></strong>
+          <span class="hud-sub" id="fpsCounter">60 FPS</span>
+          <span class="hud-sub" id="timeDisplay">03:17 AM</span>
+        </div>
+        <div class="hud-chip hud-location">
+          <span class="hud-kicker">Location</span>
+          <strong id="locationLabel"></strong>
+        </div>
+        <div class="hud-chip">
+          <span class="hud-kicker">Health</span>
+          <strong><span id="powerValue">3</span> nerve</strong>
+        </div>
+        <div class="hud-chip">
+          <span class="hud-kicker">Vision</span>
+          <strong><span id="trustValue">1</span> doubt</strong>
+        </div>
+        <div class="hud-chip">
+          <span class="hud-kicker">Insanity</span>
+          <strong><span id="insanityValue">0</span> madness</strong>
+        </div>
+        <div class="hud-chip">
+          <span class="hud-kicker">Intel</span>
+          <strong><span id="intelValue">1</span> wit</strong>
+        </div>
       </div>
 
-      <div class="character-stage">
-        <div class="sprite-frame">
-          <img id="characterSprite" class="character-sprite is-hidden" src="" alt="">
-          <div class="pixel-placeholder" id="pixelPlaceholder" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-            <span></span>
-            <span></span>
+      <div class="playfield">
+        <div class="window window-one" aria-hidden="true"></div>
+        <div class="window window-two" aria-hidden="true"></div>
+
+        <div class="character-stage">
+          <div class="sprite-frame">
+            <img id="characterSprite" class="character-sprite is-hidden" src="" alt="">
+            <div class="pixel-placeholder" id="pixelPlaceholder" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+          <div class="character-card">
+            <p class="speaker-label">Observed Subject</p>
+            <p id="characterName">Patient 09</p>
           </div>
         </div>
-        <div class="character-card">
-          <p class="speaker-label">Observed Subject</p>
-          <p id="characterName">Patient 09</p>
+
+        <button class="door" id="doorButton" type="button" aria-describedby="interactionPrompt">
+          <span class="door-panel"></span>
+          <span class="door-knob"></span>
+        </button>
+
+        <div class="interaction-callout" id="interactionPrompt">
+          <span></span>
+          <p>Press <strong>Enter</strong></p>
+        </div>
+
+        <div class="floor" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
         </div>
       </div>
 
-      <div class="scene-art" aria-hidden="true">
-        <pre id="sceneArt"></pre>
+      <div class="story-console">
+        <div>
+          <p class="chapter">Current scene</p>
+          <h1 id="sceneTitle"></h1>
+          <p class="story-text" id="storyText"></p>
+        </div>
+        <div class="scene-art" aria-hidden="true">
+          <pre id="sceneArt"></pre>
+        </div>
       </div>
 
-      <p class="chapter" id="chapterLabel"></p>
-      <h1 id="sceneTitle"></h1>
-      <p class="story-text" id="storyText"></p>
-
-      <div class="choices" id="choices"></div>
+      <nav class="bottom-toolbar" aria-label="In-game actions">
+        <button class="tool-button" type="button" aria-label="Items">
+          <span class="tool-icon">I</span>
+          <span>Items</span>
+        </button>
+        <button class="tool-button" type="button" aria-label="Position">
+          <span class="tool-icon">P</span>
+          <span>Position</span>
+        </button>
+        <button class="tool-button tool-book" type="button" aria-label="Booklet">
+          <span class="tool-icon">B</span>
+          <span>Booklet</span>
+          <small>Info text</small>
+        </button>
+        <button class="tool-button" type="button" aria-label="Hints">
+          <span class="tool-icon">?</span>
+          <span>Hints</span>
+        </button>
+        <button class="tool-button" type="button" aria-label="Shop">
+          <span class="tool-icon">$</span>
+          <span>Shop</span>
+        </button>
+      </nav>
     </section>
 
-    <aside class="status-panel">
-      <h2>Patient Log</h2>
-      <dl>
-        <div>
-          <dt>Nerve</dt>
-          <dd><span id="powerValue">3</span></dd>
-        </div>
-        <div>
-          <dt>Doubt</dt>
-          <dd><span id="trustValue">1</span></dd>
-        </div>
-        <div>
-          <dt>Fragments</dt>
-          <dd><span id="clueValue">0</span></dd>
-        </div>
-      </dl>
+    <aside class="option-panel">
+      <h2>Options</h2>
+      <button type="button">Exit</button>
+      <button type="button">Savestate</button>
+      <button type="button">Gallery</button>
+      <button type="button">More</button>
+
+      <div class="patient-log">
+        <h2>Patient Log</h2>
+        <dl>
+          <div>
+            <dt>Fragments</dt>
+            <dd><span id="clueValue">0</span></dd>
+          </div>
+          <div>
+            <dt>Scene</dt>
+            <dd id="sceneCounter">01</dd>
+          </div>
+        </dl>
+      </div>
+
+      <h2>Choices</h2>
+      <div class="choices" id="choices"></div>
 
       <h2>Path</h2>
       <ol id="historyList"></ol>
