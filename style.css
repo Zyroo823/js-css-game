@@ -281,14 +281,6 @@ button {
   image-rendering: pixelated;
 }
 
-.door::before {
-  content: "";
-  position: absolute;
-  inset: -9px 7px auto;
-  height: 16px;
-  border: 3px solid #7b2840;
-  background: #e75465;
-}
 
 .door-panel {
   position: absolute;
