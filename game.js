@@ -358,6 +358,8 @@ const state = {
   characterX: 42,
   characterY: 76,
   currentSprite: "standSprite.png",
+  walkFrame: 0,
+  walkAnimationInterval: null,
 };
 
 const chapterLabel = document.querySelector("#chapterLabel");
@@ -514,6 +516,11 @@ function resetGame() {
   state.characterX = 42;
   state.characterY = 76;
   state.currentSprite = "standSprite.png";
+  state.walkFrame = 0;
+  if (state.walkAnimationInterval) {
+    clearInterval(state.walkAnimationInterval);
+    state.walkAnimationInterval = null;
+  }
   renderScene();
 }
 
@@ -536,19 +543,17 @@ document.addEventListener("keydown", (event) => {
       case "ArrowLeft":
         event.preventDefault();
         state.characterX = Math.max(10, state.characterX - moveSpeed);
-        state.currentSprite = "sideSprite.png";
-        characterSprite.style.transform = "scaleX(-1)";
+        state.currentSprite = "sideSpriteWalkL.png";
         break;
       case "ArrowRight":
         event.preventDefault();
         state.characterX = Math.min(80, state.characterX + moveSpeed);
-        state.currentSprite = "sideSprite.png";
-        characterSprite.style.transform = "scaleX(1)";
+        state.currentSprite = "sideSpriteWalkR.png";
         break;
       case "ArrowUp":
         event.preventDefault();
         state.characterY = Math.max(50, state.characterY - moveSpeed);
-        state.currentSprite = "sideRightSprite.png";
+        state.currentSprite = "sideLeftSprite.png";
         break;
       case "ArrowDown":
         event.preventDefault();
@@ -558,10 +563,43 @@ document.addEventListener("keydown", (event) => {
     }
 
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      // Clear existing animation interval
+      if (state.walkAnimationInterval) {
+        clearInterval(state.walkAnimationInterval);
+      }
+
+      // Start walking animation
+      state.walkAnimationInterval = setInterval(() => {
+        state.walkFrame = (state.walkFrame + 1) % 2;
+        if (event.key === "ArrowLeft") {
+          state.currentSprite = "sideSpriteWalkL.png";
+        } else if (event.key === "ArrowRight") {
+          state.currentSprite = "sideSpriteWalkR.png";
+        }
+        characterSprite.src = `assets/characters/${state.currentSprite}`;
+      }, 200);
+
       characterSprite.src = `assets/characters/${state.currentSprite}`;
       characterStage.style.left = `${state.characterX}%`;
       characterStage.style.top = `${state.characterY}px`;
     }
+  }
+});
+
+document.addEventListener("keyup", (event) => {
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+    clearInterval(state.walkAnimationInterval);
+    state.walkAnimationInterval = null;
+    state.walkFrame = 0;
+    // Keep the side sprite based on last direction
+    if (event.key === "ArrowLeft") {
+      state.currentSprite = "sideLeftSprite.png";
+    } else if (event.key === "ArrowRight") {
+      state.currentSprite = "sideRightSprite.png";
+    } else {
+      state.currentSprite = "standSprite.png";
+    }
+    characterSprite.src = `assets/characters/${state.currentSprite}`;
   }
 });
 
