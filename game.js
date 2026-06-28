@@ -3,6 +3,7 @@ const scenes = {
     chapter: "Session 01",
     title: "The Ward Remembers",
     characterName: "Patient 09",
+    characterImage: "assets/characters/standSprite.png",
     art: String.raw`
       ______________________
      |  OBSERVATION WARD   |
@@ -354,6 +355,9 @@ const state = {
   insanity: 0,
   intel: 1,
   history: [],
+  characterX: 42,
+  characterY: 76,
+  currentSprite: "standSprite.png",
 };
 
 const chapterLabel = document.querySelector("#chapterLabel");
@@ -362,6 +366,7 @@ const sceneArt = document.querySelector("#sceneArt");
 const characterSprite = document.querySelector("#characterSprite");
 const pixelPlaceholder = document.querySelector("#pixelPlaceholder");
 const characterName = document.querySelector("#characterName");
+const characterStage = document.querySelector(".character-stage");
 const storyText = document.querySelector("#storyText");
 const choices = document.querySelector("#choices");
 const powerValue = document.querySelector("#powerValue");
@@ -452,10 +457,12 @@ function getLocationLabel(scene) {
 
 function renderCharacter(scene) {
   if (scene.characterImage) {
-    characterSprite.src = scene.characterImage;
+    characterSprite.src = `assets/characters/${state.currentSprite}`;
     characterSprite.alt = scene.characterName || "Character portrait";
     characterSprite.classList.remove("is-hidden");
     pixelPlaceholder.classList.add("is-hidden");
+    characterStage.style.left = `${state.characterX}%`;
+    characterStage.style.top = `${state.characterY}px`;
     return;
   }
 
@@ -504,6 +511,9 @@ function resetGame() {
   state.insanity = 0;
   state.intel = 1;
   state.history = [];
+  state.characterX = 42;
+  state.characterY = 76;
+  state.currentSprite = "standSprite.png";
   renderScene();
 }
 
@@ -515,6 +525,43 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !focusedButton) {
     event.preventDefault();
     activatePrimaryAction();
+  }
+
+  // Character movement with arrow keys
+  const moveSpeed = 2;
+  const scene = scenes[state.currentScene];
+
+  if (scene.characterImage && !focusedButton) {
+    switch (event.key) {
+      case "ArrowLeft":
+        event.preventDefault();
+        state.characterX = Math.max(10, state.characterX - moveSpeed);
+        state.currentSprite = "sideSprite.png";
+        characterSprite.style.transform = "scaleX(-1)";
+        break;
+      case "ArrowRight":
+        event.preventDefault();
+        state.characterX = Math.min(80, state.characterX + moveSpeed);
+        state.currentSprite = "sideSprite.png";
+        characterSprite.style.transform = "scaleX(1)";
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        state.characterY = Math.max(50, state.characterY - moveSpeed);
+        state.currentSprite = "sideRightSprite.png";
+        break;
+      case "ArrowDown":
+        event.preventDefault();
+        state.characterY = Math.min(200, state.characterY + moveSpeed);
+        state.currentSprite = "standSprite.png";
+        break;
+    }
+
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      characterSprite.src = `assets/characters/${state.currentSprite}`;
+      characterStage.style.left = `${state.characterX}%`;
+      characterStage.style.top = `${state.characterY}px`;
+    }
   }
 });
 
