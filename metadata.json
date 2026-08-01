@@ -1,0 +1,8 @@
+{
+    "name": "The Ward Remembers",
+    "description": "A dark psychological horror text adventure built with HTML, CSS, and JavaScript.",
+    "requestFramePermissions": [],
+    "majorCapabilities": [
+        "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+    ]
+}

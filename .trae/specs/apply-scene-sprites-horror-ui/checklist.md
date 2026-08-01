@@ -1,0 +1,6 @@
+- [x] Every scene that should show a visible character has an intentional default sprite configured
+- [x] Scene transitions and door interactions restore the correct scene sprite instead of leaving a movement sprite active
+- [x] Movement input only applies temporary sprite overrides and does not corrupt later scene rendering
+- [x] The HUD, playfield, story console, and side panel visually read as a stronger horror-themed UI
+- [x] Unavailable controls are clearly disabled and visually consistent with the updated theme
+- [x] Available verification for the environment has been completed and reviewed
