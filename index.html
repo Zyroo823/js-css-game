@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Ward Remembers</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <main class="game-shell">
     <section class="game-screen" aria-live="polite">
@@ -89,24 +91,24 @@
       </div>
 
       <nav class="bottom-toolbar" aria-label="In-game actions">
-        <button class="tool-button" type="button" aria-label="Items">
+        <button class="tool-button" id="btnItems" type="button" aria-label="Items">
           <span class="tool-icon">I</span>
           <span>Items</span>
         </button>
-        <button class="tool-button" type="button" aria-label="Position">
+        <button class="tool-button" id="btnPosition" type="button" aria-label="Position">
           <span class="tool-icon">P</span>
           <span>Position</span>
         </button>
-        <button class="tool-button tool-book" type="button" aria-label="Booklet">
+        <button class="tool-button tool-book" id="btnBooklet" type="button" aria-label="Booklet">
           <span class="tool-icon">B</span>
           <span>Booklet</span>
           <small>Info text</small>
         </button>
-        <button class="tool-button" type="button" aria-label="Hints">
+        <button class="tool-button" id="btnHints" type="button" aria-label="Hints">
           <span class="tool-icon">?</span>
           <span>Hints</span>
         </button>
-        <button class="tool-button" type="button" aria-label="Shop">
+        <button class="tool-button" id="btnShop" type="button" aria-label="Shop">
           <span class="tool-icon">$</span>
           <span>Shop</span>
         </button>
@@ -115,10 +117,11 @@
 
     <aside class="option-panel">
       <h2>Options</h2>
-      <button type="button">Exit</button>
-      <button type="button">Savestate</button>
-      <button type="button">Gallery</button>
-      <button type="button">More</button>
+      <button type="button" id="btnExit">Exit</button>
+      <button type="button" id="btnSavestate">Savestate</button>
+      <button type="button" id="btnGallery">Gallery</button>
+      <button type="button" id="btnMore">More</button>
+      <button type="button" id="btnAudioToggle" class="audio-toggle-btn">🔊 Audio: ON</button>
 
       <div class="patient-log">
         <h2>Patient Log</h2>
@@ -144,6 +147,23 @@
     </aside>
   </main>
 
+  <!-- Modal Dialog Overlay -->
+  <div id="gameModal" class="modal-overlay is-hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <header class="modal-header">
+        <h2 id="modalTitle">Modal Title</h2>
+        <button id="modalCloseBtn" type="button" class="modal-close" aria-label="Close dialog">&times;</button>
+      </header>
+      <div id="modalBody" class="modal-body">
+        <!-- Modal content dynamically injected -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastNotification" class="toast is-hidden" role="status" aria-live="polite"></div>
+
   <script src="game.js"></script>
 </body>
+
 </html>

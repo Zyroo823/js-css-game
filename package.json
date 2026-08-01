@@ -1,0 +1,15 @@
+{
+    "name": "the-ward-remembers",
+    "version": "1.0.0",
+    "description": "A dark psychological horror text adventure built with HTML, CSS, and JavaScript.",
+    "type": "module",
+    "scripts": {
+        "dev": "node server.js",
+        "build": "echo 'No build step required'",
+        "lint": "echo 'No lint step required'",
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "express": "^4.21.2"
+    }
+}
