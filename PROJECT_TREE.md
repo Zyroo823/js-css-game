@@ -23,4 +23,4 @@ jsGame/
 - `assets/scenes/` is for ward rooms, nightmare spaces, backgrounds, and scene panels.
 - `assets/ui/` is for medical-record icons, tape controls, dialogue borders, and buttons.
 
-The game currently shows a CSS pixel placeholder. When your real character art is ready, place it in `assets/characters/` and set `characterImage` on any scene in `game.js`.
+In the game currently shows a CSS pixel placeholder. When your real character art is ready, place it in `assets/characters/` and set `characterImage` on any scene in `game.js`.
