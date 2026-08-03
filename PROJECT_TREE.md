@@ -17,7 +17,7 @@ jsGame/
         `-- README.md
 ```
 
-## Asset Plan
+## Asset Plan on the game
 
 - `assets/characters/` is for patient, doctor, double, and other horror character sprites.
 - `assets/scenes/` is for ward rooms, nightmare spaces, backgrounds, and scene panels.
