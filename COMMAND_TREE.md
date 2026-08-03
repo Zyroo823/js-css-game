@@ -1,6 +1,6 @@
 # Game Command Tree
 
-This file maps the psychological horror decision paths in `game.js`.
+This file maps the psychological horror decision paths in the `game.js`.
 
 ```text
 Start: The Ward Remembers
