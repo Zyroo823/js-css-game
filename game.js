@@ -390,6 +390,9 @@ const state = {
   currentSprite: "standSprite.png",
   walkFrame: 0,
   audioEnabled: localStorage.getItem("ward_audio_enabled") !== "false",
+  userInteracted: false,
+  previousInsanity: 0,
+  previousPower: 3,
   inventory: [...defaultItems],
   unlockedEndings: JSON.parse(localStorage.getItem("ward_unlocked_endings") || "[]"),
 };
@@ -530,6 +533,85 @@ function playStatSound(isPositive) {
     osc.start();
     osc.stop(ctx.currentTime + 0.18);
   } catch (e) { }
+}
+
+// Background Music and Danger Sound
+let mainMusicAudio = null;
+let dangerSoundAudio = null;
+let mainMusicWasPlaying = false;
+let dangerSoundCooldown = false;
+
+function playMainMusic() {
+  if (!state.audioEnabled) return;
+  if (!state.userInteracted) return; // Wait for user interaction due to browser autoplay policy
+  
+  if (mainMusicAudio) {
+    mainMusicAudio.pause();
+    mainMusicAudio.currentTime = 0;
+  }
+  
+  mainMusicAudio = new Audio('assets/sounds/mainSound.wav');
+  mainMusicAudio.loop = true; // Loop infinitely without delay
+  mainMusicAudio.volume = 0.3;
+  
+  mainMusicAudio.play().catch(e => {
+    console.log('Main music play failed:', e);
+  });
+}
+
+function stopMainMusic() {
+  if (mainMusicAudio) {
+    mainMusicAudio.pause();
+    mainMusicAudio.currentTime = 0;
+  }
+}
+
+function pauseMainMusic() {
+  if (mainMusicAudio && !mainMusicAudio.paused) {
+    mainMusicWasPlaying = true;
+    mainMusicAudio.pause();
+  } else {
+    mainMusicWasPlaying = false;
+  }
+}
+
+function resumeMainMusic() {
+  if (mainMusicAudio && mainMusicWasPlaying && state.audioEnabled) {
+    mainMusicAudio.play().catch(e => {
+      console.log('Main music resume failed:', e);
+    });
+    mainMusicWasPlaying = false;
+  }
+}
+
+function playDangerSound() {
+  if (!state.audioEnabled) return;
+  if (!state.userInteracted) return; // Wait for user interaction
+  if (dangerSoundCooldown) return; // Prevent overlapping calls
+  
+  dangerSoundCooldown = true;
+  
+  // Pause main music when danger sound plays
+  pauseMainMusic();
+  
+  if (dangerSoundAudio) {
+    dangerSoundAudio.pause();
+    dangerSoundAudio.currentTime = 0;
+  }
+  
+  dangerSoundAudio = new Audio('assets/sounds/DangerNotifSound.wav');
+  dangerSoundAudio.volume = 0.5;
+  
+  dangerSoundAudio.addEventListener('ended', function() {
+    // Resume main music when danger sound ends
+    resumeMainMusic();
+    dangerSoundCooldown = false;
+  });
+  
+  dangerSoundAudio.play().catch(e => {
+    console.log('Danger sound play failed:', e);
+    dangerSoundCooldown = false;
+  });
 }
 
 // Toast Notifications
@@ -675,8 +757,16 @@ function getSceneText(scene) {
 function choosePath(choice) {
   applyEffects(choice.effects);
   state.history.push(choice.label);
+  const previousScene = state.currentScene;
   state.currentScene = choice.next;
   checkSceneItemDiscovery(choice.next);
+  
+  // Play danger sound when entering critical scenes (only when transitioning from non-critical)
+  const criticalScenes = ["basement", "double", "stairwell"];
+  if (criticalScenes.includes(state.currentScene) && !criticalScenes.includes(previousScene)) {
+    playDangerSound();
+  }
+  
   renderScene();
 }
 
@@ -715,6 +805,10 @@ function applyEffects(effects = {}) {
     state.power = Math.max(0, state.power + effects.power);
     changes.push(`${effects.power > 0 ? "+" : ""}${effects.power} Nerve`);
     playStatSound(effects.power > 0);
+    // Play danger sound only when power first drops to critical level (1 or 0)
+    if (state.previousPower > 1 && state.power <= 1 && effects.power < 0) {
+      playDangerSound();
+    }
   }
   if (effects.trust) {
     state.trust = Math.max(0, state.trust + effects.trust);
@@ -727,7 +821,13 @@ function applyEffects(effects = {}) {
   if (effects.insanity) {
     state.insanity = Math.max(0, state.insanity + effects.insanity);
     changes.push(`${effects.insanity > 0 ? "+" : ""}${effects.insanity} Madness`);
-    if (effects.insanity > 0) playStatSound(false);
+    if (effects.insanity > 0) {
+      playStatSound(false);
+      // Only play danger sound if insanity is reaching critical levels
+      if (state.insanity >= 2) {
+        playDangerSound();
+      }
+    }
   }
   if (effects.intel) {
     state.intel = Math.max(0, state.intel + effects.intel);
@@ -738,6 +838,10 @@ function applyEffects(effects = {}) {
   if (changes.length > 0) {
     showToast(`Effect: ${changes.join(", ")}`);
   }
+  
+  // Update previous values for next comparison
+  state.previousPower = state.power;
+  state.previousInsanity = state.insanity;
 }
 
 function resetGame() {
@@ -753,6 +857,20 @@ function resetGame() {
   state.currentSprite = "standSprite.png";
   state.walkFrame = 0;
   state.inventory = JSON.parse(JSON.stringify(defaultItems));
+  state.previousInsanity = 0;
+  state.previousPower = 3;
+  
+  // Reset audio
+  stopMainMusic();
+  if (dangerSoundAudio) {
+    dangerSoundAudio.pause();
+    dangerSoundAudio.currentTime = 0;
+  }
+  // Don't reset userInteracted - they've already interacted
+  if (state.audioEnabled && state.userInteracted) {
+    playMainMusic();
+  }
+  
   renderScene();
   showToast("Session restarted.");
 }
@@ -769,6 +887,8 @@ function saveAutoState() {
     characterX: state.characterX,
     characterY: state.characterY,
     inventory: state.inventory,
+    previousInsanity: state.previousInsanity,
+    previousPower: state.previousPower,
     timestamp: new Date().toLocaleTimeString(),
   };
   localStorage.setItem("ward_autosave", JSON.stringify(saveData));
@@ -1026,6 +1146,8 @@ window.saveToSlot = function (slot) {
     characterX: state.characterX,
     characterY: state.characterY,
     inventory: state.inventory,
+    previousInsanity: state.previousInsanity,
+    previousPower: state.previousPower,
     timestamp: new Date().toLocaleTimeString(),
   };
   localStorage.setItem(`ward_saveslot_${slot}`, JSON.stringify(saveData));
@@ -1047,6 +1169,8 @@ window.loadFromSlot = function (slot) {
     state.history = data.history || [];
     state.characterX = data.characterX || 42;
     state.characterY = data.characterY || 76;
+    state.previousInsanity = data.insanity;
+    state.previousPower = data.power;
     if (data.inventory) state.inventory = data.inventory;
     renderScene();
     showToast(`📂 Loaded state from Slot 0${slot}`);
@@ -1104,12 +1228,31 @@ btnMore.addEventListener("click", () => {
 btnAudioToggle.textContent = `🔊 Audio: ${state.audioEnabled ? "ON" : "OFF"}`;
 btnAudioToggle.addEventListener("click", toggleAudioState);
 
+// Initialize audio state text
+function updateAudioButton() {
+  btnAudioToggle.textContent = `🔊 Audio: ${state.audioEnabled ? "ON" : "OFF"}`;
+}
+
 function toggleAudioState() {
   state.audioEnabled = !state.audioEnabled;
   localStorage.setItem("ward_audio_enabled", state.audioEnabled);
   btnAudioToggle.textContent = `🔊 Audio: ${state.audioEnabled ? "ON" : "OFF"}`;
   showToast(`Audio ${state.audioEnabled ? "Enabled" : "Muted"}`);
   playClickSound();
+  
+  // Mark user as interacted when they manually toggle audio
+  state.userInteracted = true;
+  
+  if (state.audioEnabled) {
+    playMainMusic();
+  } else {
+    stopMainMusic();
+    if (dangerSoundAudio) {
+      dangerSoundAudio.pause();
+      dangerSoundAudio.currentTime = 0;
+    }
+  }
+  
   if (!gameModal.classList.contains("is-hidden")) {
     closeModal();
   }
@@ -1128,6 +1271,20 @@ window.clearAllData = function () {
 };
 
 // Event Listeners
+// Handle first user interaction for audio autoplay
+function handleFirstInteraction() {
+  if (!state.userInteracted) {
+    state.userInteracted = true;
+    if (state.audioEnabled) {
+      playMainMusic();
+      showToast("🎵 Audio enabled - main music started");
+    }
+  }
+}
+
+document.addEventListener('click', handleFirstInteraction, { once: true });
+document.addEventListener('keydown', handleFirstInteraction, { once: true });
+
 resetButton.addEventListener("click", () => {
   playClickSound();
   resetGame();
@@ -1301,12 +1458,15 @@ if (autoDataRaw) {
       state.insanity = autoData.insanity ?? 0;
       state.intel = autoData.intel ?? 1;
       state.history = autoData.history || [];
+      state.previousInsanity = state.insanity;
+      state.previousPower = state.power;
       if (autoData.inventory) state.inventory = autoData.inventory;
     }
   } catch (e) { }
 }
 
 renderScene();
+// Note: Main music will play after first user interaction due to browser autoplay policy
 
 // FPS Counter
 let frameCount = 0;
