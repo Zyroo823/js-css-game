@@ -40,11 +40,14 @@
         </div>
       </div>
 
-      <div class="playfield">
-        <div class="window window-one" aria-hidden="true"></div>
-        <div class="window window-two" aria-hidden="true"></div>
+      <div class="playfield" id="playfieldArea">
+        <div class="flashlight-overlay" id="flashlightOverlay" aria-hidden="true"></div>
+        <div class="insanity-spook" id="insanitySpook" aria-hidden="true"></div>
 
-        <div class="character-stage">
+        <div class="window window-one" id="hotspotWindow1" role="button" tabindex="0" aria-label="Inspect Barred Window" title="Click to inspect window"></div>
+        <div class="window window-two" id="hotspotWindow2" role="button" tabindex="0" aria-label="Inspect Fogged Glass" title="Click to inspect glass"></div>
+
+        <div class="character-stage" id="hotspotPatient" role="button" tabindex="0" aria-label="Observe Patient 09" title="Click to inspect Patient 09">
           <div class="sprite-frame">
             <img id="characterSprite" class="character-sprite is-hidden" src="" alt="">
             <div class="pixel-placeholder" id="pixelPlaceholder" aria-hidden="true">
@@ -66,12 +69,16 @@
           <span class="door-knob"></span>
         </button>
 
+        <div class="wall-scratch" id="hotspotScratch" role="button" tabindex="0" aria-label="Inspect Scratched Wall" title="Click to inspect scratched wall">
+          <span>6B</span>
+        </div>
+
         <div class="interaction-callout" id="interactionPrompt">
           <span></span>
           <p>Press <strong>Enter</strong></p>
         </div>
 
-        <div class="floor" aria-hidden="true">
+        <div class="floor" id="hotspotFloor" role="button" tabindex="0" aria-label="Inspect Ward Floor" title="Click to inspect floor tiles" aria-hidden="false">
           <span></span>
           <span></span>
           <span></span>

@@ -373,8 +373,8 @@ const scenes = {
 const defaultItems = [
   { id: "strap", name: "Restraint Strap", desc: "Coarse leather with worn metal buckles from chair 09.", usable: false },
   { id: "draught", name: "Nerve Draught", desc: "A dark glass vial labeled 'Sedative 09'. Consume to restore +1 Nerve.", usable: true, count: 1 },
-  { id: "file", name: "Confidential Dossier", desc: "Dr. Vale's confidential notes regarding Patient 09.", usable: false, acquiredAt: "file" },
-  { id: "tape", name: "Tape 09 Fragment", desc: "A magnetic tape spool containing recorded confessions.", usable: false, acquiredAt: "recorder" },
+  { id: "dossier", name: "Confidential Dossier", desc: "Dr. Vale's clinical notes on memory duplication.", usable: false },
+  { id: "tape", name: "Tape 09 Reel", desc: "Magnetic audio spool containing Patient 09's intake testimony.", usable: false },
 ];
 
 const state = {
@@ -395,6 +395,7 @@ const state = {
   previousPower: 3,
   inventory: [...defaultItems],
   unlockedEndings: JSON.parse(localStorage.getItem("ward_unlocked_endings") || "[]"),
+  discoveredHotspots: JSON.parse(localStorage.getItem("ward_hotspots") || "[]"),
 };
 
 // DOM Elements
@@ -406,6 +407,7 @@ const pixelPlaceholder = document.querySelector("#pixelPlaceholder");
 const characterName = document.querySelector("#characterName");
 const characterStage = document.querySelector(".character-stage");
 const storyText = document.querySelector("#storyText");
+const storyConsole = document.querySelector(".story-console");
 const choices = document.querySelector("#choices");
 const powerValue = document.querySelector("#powerValue");
 const trustValue = document.querySelector("#trustValue");
@@ -420,6 +422,16 @@ const doorButton = document.querySelector("#doorButton");
 const interactionPrompt = document.querySelector("#interactionPrompt");
 const fpsCounter = document.querySelector("#fpsCounter");
 const timeDisplay = document.querySelector("#timeDisplay");
+const playfieldArea = document.querySelector("#playfieldArea");
+const flashlightOverlay = document.querySelector("#flashlightOverlay");
+const insanitySpook = document.querySelector("#insanitySpook");
+
+// Hotspot DOM Elements
+const hotspotWindow1 = document.querySelector("#hotspotWindow1");
+const hotspotWindow2 = document.querySelector("#hotspotWindow2");
+const hotspotScratch = document.querySelector("#hotspotScratch");
+const hotspotFloor = document.querySelector("#hotspotFloor");
+const hotspotPatient = document.querySelector("#hotspotPatient");
 
 // Buttons & Modals DOM
 const btnItems = document.querySelector("#btnItems");
@@ -441,8 +453,16 @@ const toastNotification = document.querySelector("#toastNotification");
 
 let activeModalTrigger = null;
 
-// Sound Engine
+// ==========================================
+// 1. PROCEDURAL WEB AUDIO HORROR ENGINE
+// ==========================================
 let audioCtx = null;
+let droneGain = null;
+let droneOsc1 = null;
+let droneOsc2 = null;
+let staticNode = null;
+let staticGain = null;
+let heartbeatInterval = null;
 
 function getAudioContext() {
   if (!audioCtx) {
@@ -451,10 +471,182 @@ function getAudioContext() {
       audioCtx = new AudioContextClass();
     }
   }
-  if (audioCtx && audioCtx.state === 'suspended') {
+  if (audioCtx && audioCtx.state === "suspended") {
     audioCtx.resume();
   }
   return audioCtx;
+}
+
+function initProceduralAudio() {
+  if (!state.audioEnabled) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  // 1. Low Horror Drone
+  if (!droneGain) {
+    try {
+      droneGain = ctx.createGain();
+      droneGain.gain.setValueAtTime(0.06, ctx.currentTime);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(120, ctx.currentTime);
+
+      droneOsc1 = ctx.createOscillator();
+      droneOsc1.type = "sawtooth";
+      droneOsc1.frequency.setValueAtTime(43.65, ctx.currentTime); // F1
+
+      droneOsc2 = ctx.createOscillator();
+      droneOsc2.type = "sine";
+      droneOsc2.frequency.setValueAtTime(46.25, ctx.currentTime); // Slight dissonance beat
+
+      droneOsc1.connect(filter);
+      droneOsc2.connect(filter);
+      filter.connect(droneGain);
+      droneGain.connect(ctx.destination);
+
+      droneOsc1.start();
+      droneOsc2.start();
+    } catch (e) {
+      console.log("Drone init:", e);
+    }
+  }
+
+  // 2. Analog Tape Static / Insanity Hiss
+  if (!staticGain) {
+    try {
+      const bufferSize = ctx.sampleRate * 2;
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+      whiteNoise.loop = true;
+
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = "bandpass";
+      bandpass.frequency.setValueAtTime(1000, ctx.currentTime);
+      bandpass.Q.setValueAtTime(1.5, ctx.currentTime);
+
+      staticGain = ctx.createGain();
+      updateSanityStaticLevel();
+
+      whiteNoise.connect(bandpass);
+      bandpass.connect(staticGain);
+      staticGain.connect(ctx.destination);
+      whiteNoise.start();
+    } catch (e) {
+      console.log("Static init:", e);
+    }
+  }
+
+  updateHeartbeatRate();
+}
+
+function updateSanityStaticLevel() {
+  if (!staticGain || !audioCtx) return;
+  const targetGain = state.insanity * 0.025;
+  staticGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.5);
+}
+
+function playHeartbeatThump() {
+  if (!state.audioEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    // Dual beat: lub-dub
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(55, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.12);
+
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.12);
+
+    // Second faint thump
+    setTimeout(() => {
+      if (!state.audioEnabled || !audioCtx) return;
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(50, audioCtx.currentTime);
+      osc2.frequency.exponentialRampToValueAtTime(28, audioCtx.currentTime + 0.1);
+
+      gain2.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start();
+      osc2.stop(audioCtx.currentTime + 0.1);
+    }, 140);
+  } catch (e) {}
+}
+
+function updateHeartbeatRate() {
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  if (!state.audioEnabled) return;
+
+  // Rate accelerates as nerve drops
+  let bpmInterval = 1600; // 3 nerve: calm 38 bpm
+  if (state.power === 2) bpmInterval = 1100;
+  if (state.power === 1) bpmInterval = 650; // 92 bpm panic
+  if (state.power <= 0) bpmInterval = 420; // 142 bpm terror
+
+  heartbeatInterval = setInterval(playHeartbeatThump, bpmInterval);
+}
+
+function playDissonantStab() {
+  if (!state.audioEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const freqs = [220, 233.08, 311.13, 440]; // Dissonant cluster
+    freqs.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = idx % 2 === 0 ? "sawtooth" : "triangle";
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.8, ctx.currentTime + 0.6);
+
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.6);
+    });
+  } catch (e) {}
+}
+
+function playTypewriterTick() {
+  if (!state.audioEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(1400 + Math.random() * 400, ctx.currentTime);
+    gain.gain.setValueAtTime(0.03, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.015);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.015);
+  } catch (e) {}
 }
 
 function playClickSound() {
@@ -464,16 +656,16 @@ function playClickSound() {
     if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(800, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.05);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(750, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(260, ctx.currentTime + 0.04);
     gain.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.04);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.05);
-  } catch (e) { }
+    osc.stop(ctx.currentTime + 0.04);
+  } catch (e) {}
 }
 
 function playFootstepSound() {
@@ -483,7 +675,7 @@ function playFootstepSound() {
     if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'triangle';
+    osc.type = "triangle";
     osc.frequency.setValueAtTime(110, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(45, ctx.currentTime + 0.07);
     gain.gain.setValueAtTime(0.08, ctx.currentTime);
@@ -492,7 +684,7 @@ function playFootstepSound() {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.07);
-  } catch (e) { }
+  } catch (e) {}
 }
 
 function playDoorSound() {
@@ -502,16 +694,16 @@ function playDoorSound() {
     if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sawtooth';
+    osc.type = "sawtooth";
     osc.frequency.setValueAtTime(140, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.22);
+    osc.frequency.exponentialRampToValueAtTime(48, ctx.currentTime + 0.25);
     gain.gain.setValueAtTime(0.18, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.22);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.22);
-  } catch (e) { }
+    osc.stop(ctx.currentTime + 0.25);
+  } catch (e) {}
 }
 
 function playStatSound(isPositive) {
@@ -521,7 +713,7 @@ function playStatSound(isPositive) {
     if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sine';
+    osc.type = "sine";
     const startFreq = isPositive ? 320 : 480;
     const endFreq = isPositive ? 640 : 180;
     osc.frequency.setValueAtTime(startFreq, ctx.currentTime);
@@ -532,87 +724,210 @@ function playStatSound(isPositive) {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.18);
-  } catch (e) { }
+  } catch (e) {}
 }
 
-// Background Music and Danger Sound
+// Fallback soundtrack
 let mainMusicAudio = null;
-let dangerSoundAudio = null;
-let mainMusicWasPlaying = false;
-let dangerSoundCooldown = false;
-
 function playMainMusic() {
-  if (!state.audioEnabled) return;
-  if (!state.userInteracted) return; // Wait for user interaction due to browser autoplay policy
-  
-  if (mainMusicAudio) {
-    mainMusicAudio.pause();
-    mainMusicAudio.currentTime = 0;
+  if (!state.audioEnabled || !state.userInteracted) return;
+  initProceduralAudio();
+  try {
+    if (!mainMusicAudio) {
+      mainMusicAudio = new Audio("assets/sounds/mainSound.wav");
+      mainMusicAudio.loop = true;
+      mainMusicAudio.volume = 0.25;
+    }
+    mainMusicAudio.play().catch(() => {});
+  } catch (e) {}
+}
+
+function stopAllAudio() {
+  if (mainMusicAudio) mainMusicAudio.pause();
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  if (droneGain) droneGain.gain.setValueAtTime(0, audioCtx.currentTime);
+  if (staticGain) staticGain.gain.setValueAtTime(0, audioCtx.currentTime);
+}
+
+// ==========================================
+// 2. SANITY & HALLUCINATION ENGINE
+// ==========================================
+const hallucinationPhrases = [
+  "[DON'T LOOK BEHIND YOU]",
+  "[NOT YOUR REAL FACE]",
+  "[DR VALE RECORDED YOUR DEATH]",
+  "[SUBJECT 09 CEASED FUNCTION 2004]",
+  "[THE DOOR DOES NOT LEAD OUT]",
+  "[HE IS SMILING AT YOU]",
+];
+
+function triggerHallucination() {
+  if (insanitySpook) {
+    insanitySpook.classList.remove("active");
+    void insanitySpook.offsetWidth; // Reflow
+    insanitySpook.classList.add("active");
   }
-  
-  mainMusicAudio = new Audio('assets/sounds/mainSound.wav');
-  mainMusicAudio.loop = true; // Loop infinitely without delay
-  mainMusicAudio.volume = 0.3;
-  
-  mainMusicAudio.play().catch(e => {
-    console.log('Main music play failed:', e);
+
+  document.body.classList.add("screen-tremor");
+  setTimeout(() => {
+    document.body.classList.remove("screen-tremor");
+  }, 400);
+
+  playDissonantStab();
+
+  // Momentary phrase glitch in story text
+  if (storyText && typewriterCurrentFullText) {
+    const randomPhrase = hallucinationPhrases[Math.floor(Math.random() * hallucinationPhrases.length)];
+    const words = typewriterCurrentFullText.split(" ");
+    const glitchIdx = Math.floor(Math.random() * Math.max(1, words.length - 2));
+    words[glitchIdx] = `<span style="color:#ff3b47; font-weight:bold; text-shadow:0 0 8px #ff0055;">${randomPhrase}</span>`;
+    storyText.innerHTML = words.join(" ");
+
+    setTimeout(() => {
+      if (storyText) storyText.textContent = typewriterCurrentFullText;
+    }, 1800);
+  }
+}
+
+// ==========================================
+// 3. TYPEWRITER TEXT REVEAL ENGINE
+// ==========================================
+let typewriterTimer = null;
+let typewriterCurrentFullText = "";
+let isTypingActive = false;
+
+function renderStoryTypewriter(fullText) {
+  if (typewriterTimer) clearInterval(typewriterTimer);
+  typewriterCurrentFullText = fullText;
+  storyText.textContent = "";
+  storyText.classList.add("story-typing");
+  isTypingActive = true;
+
+  let charIndex = 0;
+  const speed = 18; // ms per char
+
+  typewriterTimer = setInterval(() => {
+    if (charIndex < fullText.length) {
+      storyText.textContent += fullText.charAt(charIndex);
+      if (charIndex % 3 === 0) playTypewriterTick();
+      charIndex++;
+    } else {
+      completeTypewriter();
+    }
+  }, speed);
+}
+
+function completeTypewriter() {
+  if (typewriterTimer) clearInterval(typewriterTimer);
+  storyText.textContent = typewriterCurrentFullText;
+  storyText.classList.remove("story-typing");
+  isTypingActive = false;
+}
+
+storyConsole.addEventListener("click", () => {
+  if (isTypingActive) {
+    completeTypewriter();
+  }
+});
+
+// ==========================================
+// 4. FLASHLIGHT & PLAYFIELD HOTSPOTS
+// ==========================================
+if (playfieldArea) {
+  playfieldArea.addEventListener("mousemove", (e) => {
+    const rect = playfieldArea.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    playfieldArea.style.setProperty("--flash-x", `${x}%`);
+    playfieldArea.style.setProperty("--flash-y", `${y}%`);
+  });
+
+  playfieldArea.addEventListener("touchmove", (e) => {
+    if (e.touches[0]) {
+      const rect = playfieldArea.getBoundingClientRect();
+      const x = ((e.touches[0].clientX - rect.left) / rect.width) * 100;
+      const y = ((e.touches[0].clientY - rect.top) / rect.height) * 100;
+      playfieldArea.style.setProperty("--flash-x", `${x}%`);
+      playfieldArea.style.setProperty("--flash-y", `${y}%`);
+    }
   });
 }
 
-function stopMainMusic() {
-  if (mainMusicAudio) {
-    mainMusicAudio.pause();
-    mainMusicAudio.currentTime = 0;
+function handleHotspotClick(hotspotId) {
+  playClickSound();
+  let title = "Inspection";
+  let content = "";
+
+  if (hotspotId === "window1") {
+    title = "Observation Window [Bars]";
+    content = `
+      <p>Cold moonlight pours through the iron bars. Outside, the pine trees of the asylum grounds are frozen in heavy fog.</p>
+      <p>You count 14 bars—one for each year you cannot seem to remember.</p>
+    `;
+    if (!state.discoveredHotspots.includes("window1")) {
+      state.discoveredHotspots.push("window1");
+      state.intel += 1;
+      intelValue.textContent = state.intel;
+      showToast("🔍 Discovered: Window Count (+1 Wit)");
+      playStatSound(true);
+    }
+  } else if (hotspotId === "window2") {
+    title = "Fogged Glass Pane";
+    content = `
+      <p>You wipe condensation off the chilled glass. On the exterior reflection, a silhouette wearing your exact hospital gown turns away into the corridor shadows.</p>
+    `;
+    if (!state.discoveredHotspots.includes("window2")) {
+      state.discoveredHotspots.push("window2");
+      state.trust += 1;
+      state.clue += 1;
+      trustValue.textContent = state.trust;
+      clueValue.textContent = state.clue;
+      showToast("🔍 Discovered: Fogged Reflection (+1 Doubt, +1 Fragment)");
+      playStatSound(true);
+    }
+  } else if (hotspotId === "scratch") {
+    title = "Wall Carvings [6B]";
+    content = `
+      <p>Nail scratches gouged deep into the plaster: <em>'DAY 489 - DR VALE RECORDED MY SLEEP'</em>.</p>
+      <p>A cipher sequence is carved near the base: <strong>[CODE 6B-09]</strong>.</p>
+    `;
+    if (!state.discoveredHotspots.includes("scratch")) {
+      state.discoveredHotspots.push("scratch");
+      state.intel += 1;
+      intelValue.textContent = state.intel;
+      showToast("📋 Discovered: Scratched Room Code (+1 Wit)");
+      playStatSound(true);
+    }
+  } else if (hotspotId === "floor") {
+    title = "Stained Linoleum Floor";
+    content = `
+      <p>Dark oxidized stains are embedded between the tile seams. Underneath the loose corner of one tile, you feel a folded parchment slip.</p>
+    `;
+    if (!state.discoveredHotspots.includes("floor")) {
+      state.discoveredHotspots.push("floor");
+      state.clue += 1;
+      clueValue.textContent = state.clue;
+      showToast("📄 Discovered: Concealed Slip (+1 Fragment)");
+      playStatSound(true);
+    }
+  } else if (hotspotId === "patient") {
+    title = "Patient 09 [Self Examination]";
+    content = `
+      <p><strong>Heart Rate:</strong> ${state.power <= 1 ? "Erratic (High Distress)" : "Strained (Guarded)"}</p>
+      <p><strong>Nerve Level:</strong> ${state.power} / 3 | <strong>Madness:</strong> ${state.insanity}</p>
+      <p><em>"My fingers feel numb, but I must find the exit before the session tape finishes rewinding."</em></p>
+    `;
   }
+
+  localStorage.setItem("ward_hotspots", JSON.stringify(state.discoveredHotspots));
+  openModal(title, content);
 }
 
-function pauseMainMusic() {
-  if (mainMusicAudio && !mainMusicAudio.paused) {
-    mainMusicWasPlaying = true;
-    mainMusicAudio.pause();
-  } else {
-    mainMusicWasPlaying = false;
-  }
-}
-
-function resumeMainMusic() {
-  if (mainMusicAudio && mainMusicWasPlaying && state.audioEnabled) {
-    mainMusicAudio.play().catch(e => {
-      console.log('Main music resume failed:', e);
-    });
-    mainMusicWasPlaying = false;
-  }
-}
-
-function playDangerSound() {
-  if (!state.audioEnabled) return;
-  if (!state.userInteracted) return; // Wait for user interaction
-  if (dangerSoundCooldown) return; // Prevent overlapping calls
-  
-  dangerSoundCooldown = true;
-  
-  // Pause main music when danger sound plays
-  pauseMainMusic();
-  
-  if (dangerSoundAudio) {
-    dangerSoundAudio.pause();
-    dangerSoundAudio.currentTime = 0;
-  }
-  
-  dangerSoundAudio = new Audio('assets/sounds/DangerNotifSound.wav');
-  dangerSoundAudio.volume = 0.5;
-  
-  dangerSoundAudio.addEventListener('ended', function() {
-    // Resume main music when danger sound ends
-    resumeMainMusic();
-    dangerSoundCooldown = false;
-  });
-  
-  dangerSoundAudio.play().catch(e => {
-    console.log('Danger sound play failed:', e);
-    dangerSoundCooldown = false;
-  });
-}
+if (hotspotWindow1) hotspotWindow1.addEventListener("click", () => handleHotspotClick("window1"));
+if (hotspotWindow2) hotspotWindow2.addEventListener("click", () => handleHotspotClick("window2"));
+if (hotspotScratch) hotspotScratch.addEventListener("click", () => handleHotspotClick("scratch"));
+if (hotspotFloor) hotspotFloor.addEventListener("click", () => handleHotspotClick("floor"));
+if (hotspotPatient) hotspotPatient.addEventListener("click", () => handleHotspotClick("patient"));
 
 // Toast Notifications
 let toastTimeout = null;
@@ -625,7 +940,9 @@ function showToast(message) {
   }, 3200);
 }
 
-// Render Core
+// ==========================================
+// RENDER SCENE
+// ==========================================
 function renderScene() {
   const scene = scenes[state.currentScene];
 
@@ -636,7 +953,9 @@ function renderScene() {
   locationLabel.textContent = getLocationLabel(scene);
   sceneCounter.textContent = String(Object.keys(scenes).indexOf(state.currentScene) + 1).padStart(2, "0");
   renderCharacter(scene);
-  storyText.textContent = getSceneText(scene);
+
+  const fullText = getSceneText(scene);
+  renderStoryTypewriter(fullText);
 
   // Insanity visual effect
   if (state.insanity >= 2) {
@@ -651,6 +970,9 @@ function renderScene() {
   insanityValue.textContent = state.insanity;
   intelValue.textContent = state.intel;
 
+  updateSanityStaticLevel();
+  updateHeartbeatRate();
+
   historyList.innerHTML = state.history
     .map((item) => `<li>${item}</li>`)
     .join("");
@@ -659,7 +981,6 @@ function renderScene() {
   updateDoorPrompt(scene);
 
   if (scene.ending) {
-    // Unlock ending record
     if (scene.endingKey && !state.unlockedEndings.includes(scene.endingKey)) {
       state.unlockedEndings.push(scene.endingKey);
       localStorage.setItem("ward_unlocked_endings", JSON.stringify(state.unlockedEndings));
@@ -709,15 +1030,8 @@ function updateDoorPrompt(scene) {
 
 function getLocationLabel(scene) {
   const cleanChapter = scene.chapter.replace("Session ", "Floor ");
-
-  if (scene.chapter === "Ending") {
-    return "Discharge corridor";
-  }
-
-  if (scene.chapter === "Final Session") {
-    return "Lower ward treatment room";
-  }
-
+  if (scene.chapter === "Ending") return "Discharge corridor";
+  if (scene.chapter === "Final Session") return "Lower ward treatment room";
   return `${cleanChapter}, ${scene.title}`;
 }
 
@@ -742,15 +1056,12 @@ function getSceneText(scene) {
   if (scene.ending && state.power <= 0) {
     return `${scene.text} You have no nerve left, so the final words arrive in someone else's handwriting.`;
   }
-
   if (scene.ending && state.clue >= 3) {
     return `${scene.text} Because you gathered enough fragments, the hidden version of events stays visible.`;
   }
-
   if (scene.ending && state.trust >= 3) {
     return `${scene.text} Because doubt took root, the ward cannot fully convince you this is over.`;
   }
-
   return scene.text;
 }
 
@@ -760,13 +1071,12 @@ function choosePath(choice) {
   const previousScene = state.currentScene;
   state.currentScene = choice.next;
   checkSceneItemDiscovery(choice.next);
-  
-  // Play danger sound when entering critical scenes (only when transitioning from non-critical)
+
   const criticalScenes = ["basement", "double", "stairwell"];
   if (criticalScenes.includes(state.currentScene) && !criticalScenes.includes(previousScene)) {
-    playDangerSound();
+    triggerHallucination();
   }
-  
+
   renderScene();
 }
 
@@ -805,9 +1115,8 @@ function applyEffects(effects = {}) {
     state.power = Math.max(0, state.power + effects.power);
     changes.push(`${effects.power > 0 ? "+" : ""}${effects.power} Nerve`);
     playStatSound(effects.power > 0);
-    // Play danger sound only when power first drops to critical level (1 or 0)
     if (state.previousPower > 1 && state.power <= 1 && effects.power < 0) {
-      playDangerSound();
+      triggerHallucination();
     }
   }
   if (effects.trust) {
@@ -823,9 +1132,8 @@ function applyEffects(effects = {}) {
     changes.push(`${effects.insanity > 0 ? "+" : ""}${effects.insanity} Madness`);
     if (effects.insanity > 0) {
       playStatSound(false);
-      // Only play danger sound if insanity is reaching critical levels
       if (state.insanity >= 2) {
-        playDangerSound();
+        triggerHallucination();
       }
     }
   }
@@ -838,8 +1146,7 @@ function applyEffects(effects = {}) {
   if (changes.length > 0) {
     showToast(`Effect: ${changes.join(", ")}`);
   }
-  
-  // Update previous values for next comparison
+
   state.previousPower = state.power;
   state.previousInsanity = state.insanity;
 }
@@ -859,18 +1166,12 @@ function resetGame() {
   state.inventory = JSON.parse(JSON.stringify(defaultItems));
   state.previousInsanity = 0;
   state.previousPower = 3;
-  
-  // Reset audio
-  stopMainMusic();
-  if (dangerSoundAudio) {
-    dangerSoundAudio.pause();
-    dangerSoundAudio.currentTime = 0;
-  }
-  // Don't reset userInteracted - they've already interacted
+
+  stopAllAudio();
   if (state.audioEnabled && state.userInteracted) {
     playMainMusic();
   }
-  
+
   renderScene();
   showToast("Session restarted.");
 }
@@ -894,7 +1195,9 @@ function saveAutoState() {
   localStorage.setItem("ward_autosave", JSON.stringify(saveData));
 }
 
-// Modal Engine
+// ==========================================
+// 5. CLASSIFIED EVIDENCE BOOKLET & ARCHIVE
+// ==========================================
 function openModal(titleText, bodyHTML, triggerElement = null) {
   activeModalTrigger = triggerElement || document.activeElement;
   modalTitle.textContent = titleText;
@@ -922,20 +1225,112 @@ gameModal.addEventListener("click", (e) => {
   }
 });
 
-// Toolbar Item Modals
+// Case Binder Modal
+btnBooklet.addEventListener("click", () => {
+  playClickSound();
+  renderBookletModal("dossier");
+});
+
+function renderBookletModal(activeTab = "dossier") {
+  const bookletHTML = `
+    <div>
+      <div class="binder-tabs">
+        <button class="binder-tab-btn ${activeTab === "dossier" ? "active" : ""}" onclick="switchBinderTab('dossier')">1. Case Dossier</button>
+        <button class="binder-tab-btn ${activeTab === "tapes" ? "active" : ""}" onclick="switchBinderTab('tapes')">2. Audio Logs</button>
+        <button class="binder-tab-btn ${activeTab === "mechanics" ? "active" : ""}" onclick="switchBinderTab('mechanics')">3. Ward Rules</button>
+      </div>
+
+      <div class="binder-panel">
+        ${activeTab === "dossier" ? renderDossierTab() : ""}
+        ${activeTab === "tapes" ? renderTapesTab() : ""}
+        ${activeTab === "mechanics" ? renderMechanicsTab() : ""}
+      </div>
+    </div>
+  `;
+  openModal("Classified Case Binder: Ward 6B", bookletHTML, btnBooklet);
+}
+
+window.switchBinderTab = function (tab) {
+  playClickSound();
+  renderBookletModal(tab);
+};
+
+function renderDossierTab() {
+  return `
+    <div>
+      <p style="color:#ffa4a8; margin:0 0 6px;"><strong>SUBJECT 09 PSYCHIATRIC RECORD</strong></p>
+      <p style="font-size:0.84rem; color:#aaa; margin:0 0 12px;">Dr. Sterling Vale, Chief of Observation — St. Agatha Rest Home</p>
+      
+      <div style="background:#090c0f; border:1px solid #232c38; padding:12px; border-radius:4px; font-size:0.85rem; line-height:1.55;">
+        <p><strong>Admitted:</strong> October 14, 2004</p>
+        <p><strong>Primary Symptoms:</strong> Spontaneous memory replication, sleepwalking into mirrors, inability to distinguish authentic childhood memories from planted clinical prompts.</p>
+        <p><strong>Session 09 Note:</strong> <em>"The subject's nerve is deteriorating. When we attempt to remove the planted memory, the authentic memory attempts to replicate it. Both voices sound identical on playback."</em></p>
+      </div>
+    </div>
+  `;
+}
+
+function renderTapesTab() {
+  return `
+    <div>
+      <p style="color:#ffa4a8; margin:0 0 8px;"><strong>REEL-TO-REEL EVIDENCE ARCHIVE</strong></p>
+      
+      <div class="tape-player-widget">
+        <div class="tape-info">
+          <strong>Tape 01: Initial Intake (03:17 AM)</strong>
+          <small>"State your name for the record." — "I have two names now."</small>
+        </div>
+        <button class="modal-action-btn" onclick="playTapePreview(1)">▶ Play Audio</button>
+      </div>
+
+      <div class="tape-player-widget">
+        <div class="tape-info">
+          <strong>Tape 04: The Mirror Session</strong>
+          <small>"Look at the glass, Patient 09. Who is smiling first?"</small>
+        </div>
+        <button class="modal-action-btn" onclick="playTapePreview(4)">▶ Play Audio</button>
+      </div>
+
+      <div class="tape-player-widget">
+        <div class="tape-info">
+          <strong>Tape 09: Extraction Failure</strong>
+          <small>"The straps are open... Dr. Vale, where did you go?"</small>
+        </div>
+        <button class="modal-action-btn" onclick="playTapePreview(9)">▶ Play Audio</button>
+      </div>
+    </div>
+  `;
+}
+
+window.playTapePreview = function (tapeNum) {
+  playClickSound();
+  playDissonantStab();
+  showToast(`📼 Playing Reel Log 0${tapeNum}...`);
+};
+
+function renderMechanicsTab() {
+  return `
+    <div>
+      <h4 style="color:#e5bd67; margin-top:0;">TELEMETRY METRICS GUIDE</h4>
+      <ul style="padding-left: 20px; line-height: 1.6; font-size: 0.86rem;">
+        <li><strong style="color:#ff6b72;">Nerve (Health):</strong> Your psychological resilience against panic. Drops trigger rapid heartbeats and narrative delirium.</li>
+        <li><strong style="color:#5ce3b3;">Doubt (Vision):</strong> Skepticism toward asylum illusions. High doubt unlocks concealed truths in endings.</li>
+        <li><strong style="color:#f770c6;">Madness (Insanity):</strong> Accumulated through traumatic encounters. High madness induces reality glitches and static.</li>
+        <li><strong style="color:#f3d47d;">Wit (Intel):</strong> Comprehension of Dr. Vale's ciphers and ward navigation.</li>
+      </ul>
+    </div>
+  `;
+}
+
+// Items Modal
 btnItems.addEventListener("click", () => {
   playClickSound();
   renderItemsModal();
 });
 
 function renderItemsModal() {
-  const activeScene = scenes[state.currentScene];
   let itemsHTML = `<div class="modal-grid">`;
-
-  // Dynamic inventory items based on progression
-  let visibleItems = [...state.inventory];
-
-  visibleItems.forEach((item) => {
+  state.inventory.forEach((item) => {
     let canUse = item.usable && item.count > 0;
     itemsHTML += `
       <div class="modal-item-card">
@@ -943,16 +1338,16 @@ function renderItemsModal() {
           <strong>${item.name} ${item.count ? `(x${item.count})` : ""}</strong>
           <p>${item.desc}</p>
         </div>
-        ${item.usable
-        ? `<button class="modal-action-btn" onclick="useItem('${item.id}')" ${!canUse ? "disabled" : ""}>Use Item</button>`
-        : `<span style="font-size:0.75rem; color:#666;">Key Item</span>`
-      }
+        ${
+          item.usable
+            ? `<button class="modal-action-btn" onclick="useItem('${item.id}')" ${!canUse ? "disabled" : ""}>Use Item</button>`
+            : `<span style="font-size:0.75rem; color:#777;">Key Item</span>`
+        }
       </div>
     `;
   });
-
   itemsHTML += `</div>`;
-  openModal("Inventory & Record Fragments", itemsHTML, btnItems);
+  openModal("Inventory & Evidence Items", itemsHTML, btnItems);
 }
 
 window.useItem = function (itemId) {
@@ -963,6 +1358,7 @@ window.useItem = function (itemId) {
     state.power += 1;
     powerValue.textContent = state.power;
     playStatSound(true);
+    updateHeartbeatRate();
     showToast("🧪 Consumed Nerve Draught (+1 Nerve)");
     renderItemsModal();
   }
@@ -970,7 +1366,6 @@ window.useItem = function (itemId) {
 
 btnPosition.addEventListener("click", () => {
   playClickSound();
-  const scene = scenes[state.currentScene];
   const posHTML = `
     <div style="text-align: center;">
       <p><strong>CURRENT ELEVATION:</strong> Floor 6B, Chamber ${Object.keys(scenes).indexOf(state.currentScene) + 1}</p>
@@ -983,41 +1378,21 @@ btnPosition.addEventListener("click", () => {
    │ [6B-04] Treatment B   │ -> ${["stairwell", "basement", "double"].includes(state.currentScene) ? "◄ YOU ARE HERE" : "Locked"}
    └───────────────────────┘
       </div>
-      <p style="color:#aaa; font-size:0.85rem;">Stage Coordinates: X=${Math.round(state.characterX)}%, Y=${Math.round(state.characterY)}px</p>
+      <p style="color:#aaa; font-size:0.85rem;">Coordinates: X=${Math.round(state.characterX)}%, Y=${Math.round(state.characterY)}px</p>
     </div>
   `;
   openModal("Ward Map & Navigation", posHTML, btnPosition);
 });
 
-btnBooklet.addEventListener("click", () => {
-  playClickSound();
-  const bookletHTML = `
-    <div>
-      <h3 style="color:#ff8d8b; margin-top:0;">PATIENT DOSSIER: SUBJECT 09</h3>
-      <p><strong>Admitted:</strong> October 14, 2004</p>
-      <p><strong>Condition:</strong> Memory duplication, nocturnal fugue, voice mirroring.</p>
-      <hr style="border-color:#333; margin:12px 0;">
-      <h4 style="color:#e5bd67;">MECHANICS GUIDE:</h4>
-      <ul>
-        <li><strong>Nerve (Health):</strong> Your psychological resilience. Reaching 0 alters final narrative choices.</li>
-        <li><strong>Doubt (Vision):</strong> Measures your skepticism towards the ward's tricks. High doubt reveals alternate truths.</li>
-        <li><strong>Madness (Insanity):</strong> Accumulates through traumatic choices. Causes reality distortions.</li>
-        <li><strong>Wit (Intel):</strong> Your comprehension of Dr. Vale's records and treatment secrets.</li>
-      </ul>
-    </div>
-  `;
-  openModal("Observation Booklet & Rules", bookletHTML, btnBooklet);
-});
-
 btnHints.addEventListener("click", () => {
   playClickSound();
-  let hintMsg = "Look closely at the choice details before deciding. Every action costs nerve or gains insight.";
+  let hintMsg = "Examine the playfield closely with your flashlight beam. Click on windows, scratch marks, or the floor to uncover hidden fragments.";
   if (state.power <= 1) {
     hintMsg = "⚠️ Your Nerve is critically low (1)! Check your Items to see if you can consume a Nerve Draught, or choose options that avoid physical struggle.";
   } else if (state.clue === 0) {
-    hintMsg = "🔍 You have not found any Fragments yet. Look for choices involving files, mirrors, or old name tags.";
+    hintMsg = "🔍 You have not found any Fragments yet. Click on the barred windows and scratched walls in the playfield.";
   } else if (state.insanity >= 2) {
-    hintMsg = "👁️ Your Madness is rising. Some memories you encounter may be illusions planted by the ward.";
+    hintMsg = "👁️ Your Madness is rising. Screen tremors indicate proximity to the final treatment chambers.";
   }
 
   const hintHTML = `
@@ -1107,7 +1482,6 @@ btnSavestate.addEventListener("click", () => {
 
 function renderSavestateModal() {
   let slotsHTML = `<div><p style="color:#aaa;">Save your current progress state or load a previous checkpoint.</p>`;
-
   for (let i = 1; i <= 3; i++) {
     const slotKey = `ward_saveslot_${i}`;
     const rawData = localStorage.getItem(slotKey);
@@ -1128,7 +1502,6 @@ function renderSavestateModal() {
       </div>
     `;
   }
-
   slotsHTML += `</div>`;
   openModal("Savestate Checkpoints", slotsHTML, btnSavestate);
 }
@@ -1228,31 +1601,21 @@ btnMore.addEventListener("click", () => {
 btnAudioToggle.textContent = `🔊 Audio: ${state.audioEnabled ? "ON" : "OFF"}`;
 btnAudioToggle.addEventListener("click", toggleAudioState);
 
-// Initialize audio state text
-function updateAudioButton() {
-  btnAudioToggle.textContent = `🔊 Audio: ${state.audioEnabled ? "ON" : "OFF"}`;
-}
-
 function toggleAudioState() {
   state.audioEnabled = !state.audioEnabled;
   localStorage.setItem("ward_audio_enabled", state.audioEnabled);
   btnAudioToggle.textContent = `🔊 Audio: ${state.audioEnabled ? "ON" : "OFF"}`;
   showToast(`Audio ${state.audioEnabled ? "Enabled" : "Muted"}`);
   playClickSound();
-  
-  // Mark user as interacted when they manually toggle audio
+
   state.userInteracted = true;
-  
+
   if (state.audioEnabled) {
     playMainMusic();
   } else {
-    stopMainMusic();
-    if (dangerSoundAudio) {
-      dangerSoundAudio.pause();
-      dangerSoundAudio.currentTime = 0;
-    }
+    stopAllAudio();
   }
-  
+
   if (!gameModal.classList.contains("is-hidden")) {
     closeModal();
   }
@@ -1264,26 +1627,25 @@ window.clearAllData = function () {
   if (confirm("Are you sure you want to clear all saves and gallery unlocks?")) {
     localStorage.clear();
     state.unlockedEndings = [];
+    state.discoveredHotspots = [];
     resetGame();
     showToast("All saved data cleared.");
     closeModal();
   }
 };
 
-// Event Listeners
-// Handle first user interaction for audio autoplay
+// First interaction listener for Web Audio API
 function handleFirstInteraction() {
   if (!state.userInteracted) {
     state.userInteracted = true;
     if (state.audioEnabled) {
       playMainMusic();
-      showToast("🎵 Audio enabled - main music started");
     }
   }
 }
 
-document.addEventListener('click', handleFirstInteraction, { once: true });
-document.addEventListener('keydown', handleFirstInteraction, { once: true });
+document.addEventListener("click", handleFirstInteraction, { once: true });
+document.addEventListener("keydown", handleFirstInteraction, { once: true });
 
 resetButton.addEventListener("click", () => {
   playClickSound();
@@ -1298,16 +1660,14 @@ doorButton.addEventListener("click", () => {
 function activatePrimaryAction() {
   const scene = scenes[state.currentScene];
   const firstChoice = scene.choices[0];
-
   if (firstChoice) {
     choosePath(firstChoice);
     return;
   }
-
   resetGame();
 }
 
-// Keyboard Input System
+// Keyboard System
 const pressedKeys = {};
 
 document.addEventListener("keydown", (event) => {
@@ -1316,7 +1676,6 @@ document.addEventListener("keydown", (event) => {
   const isTyping = event.target && (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA");
 
   if (isTyping) return;
-
   pressedKeys[event.key] = true;
 
   if (event.key === "Escape" && modalOpen) {
@@ -1325,7 +1684,6 @@ document.addEventListener("keydown", (event) => {
   }
 
   if (!modalOpen) {
-    // Quick choices 1 & 2
     if (event.key === "1") {
       const scene = scenes[state.currentScene];
       if (scene.choices[0]) {
@@ -1340,27 +1698,22 @@ document.addEventListener("keydown", (event) => {
       }
     }
 
-    // Modal Shortcuts
-    if (event.key.toLowerCase() === "i") {
-      btnItems.click();
-    } else if (event.key.toLowerCase() === "p") {
-      btnPosition.click();
-    } else if (event.key.toLowerCase() === "b") {
-      btnBooklet.click();
-    } else if (event.key === "?" || event.key.toLowerCase() === "h") {
-      btnHints.click();
-    } else if (event.key === "$") {
-      btnShop.click();
-    } else if (event.key.toLowerCase() === "g") {
-      btnGallery.click();
-    } else if (event.key.toLowerCase() === "m") {
-      btnMore.click();
-    }
+    if (event.key.toLowerCase() === "i") btnItems.click();
+    else if (event.key.toLowerCase() === "p") btnPosition.click();
+    else if (event.key.toLowerCase() === "b") btnBooklet.click();
+    else if (event.key === "?" || event.key.toLowerCase() === "h") btnHints.click();
+    else if (event.key === "$") btnShop.click();
+    else if (event.key.toLowerCase() === "g") btnGallery.click();
+    else if (event.key.toLowerCase() === "m") btnMore.click();
 
     if (event.key === "Enter" && !focusedButton) {
       event.preventDefault();
-      playDoorSound();
-      activatePrimaryAction();
+      if (isTypingActive) {
+        completeTypewriter();
+      } else {
+        playDoorSound();
+        activatePrimaryAction();
+      }
     }
   }
 });
@@ -1379,7 +1732,7 @@ document.addEventListener("keyup", (event) => {
   }
 });
 
-// Character Smooth Movement Loop
+// Character loop
 function startCharacterLoop() {
   let lastWalkTime = 0;
 
@@ -1445,7 +1798,7 @@ function startCharacterLoop() {
 
 startCharacterLoop();
 
-// Try loading existing autosave if available
+// Load autosave
 const autoDataRaw = localStorage.getItem("ward_autosave");
 if (autoDataRaw) {
   try {
@@ -1462,40 +1815,33 @@ if (autoDataRaw) {
       state.previousPower = state.power;
       if (autoData.inventory) state.inventory = autoData.inventory;
     }
-  } catch (e) { }
+  } catch (e) {}
 }
 
 renderScene();
-// Note: Main music will play after first user interaction due to browser autoplay policy
 
-// FPS Counter
+// Real-time clock & FPS
 let frameCount = 0;
 let lastTime = performance.now();
-
 function updateFPS() {
   const currentTime = performance.now();
   frameCount++;
-
   if (currentTime - lastTime >= 1000) {
     fpsCounter.textContent = `${frameCount} FPS`;
     frameCount = 0;
     lastTime = currentTime;
   }
-
   requestAnimationFrame(updateFPS);
 }
-
 requestAnimationFrame(updateFPS);
 
-// Real-time HUD Clock
 function updateTime() {
   const now = new Date();
   const hours = now.getHours();
-  const minutes = now.getMinutes().toString().padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const minutes = now.getMinutes().toString().padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
   const displayHours = hours % 12 || 12;
   timeDisplay.textContent = `${displayHours}:${minutes} ${ampm}`;
 }
-
 updateTime();
 setInterval(updateTime, 10000);
