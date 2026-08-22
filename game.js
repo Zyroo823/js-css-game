@@ -379,6 +379,7 @@ const defaultItems = [
 
 const state = {
   currentScene: "start",
+  previousScene: "start",
   power: 3,
   trust: 1,
   clue: 0,
@@ -729,6 +730,10 @@ function playStatSound(isPositive) {
 
 // Fallback soundtrack
 let mainMusicAudio = null;
+let dangerSoundAudio = null;
+let mainMusicWasPlaying = false;
+let dangerSoundCooldown = false;
+
 function playMainMusic() {
   if (!state.audioEnabled || !state.userInteracted) return;
   initProceduralAudio();
@@ -742,8 +747,59 @@ function playMainMusic() {
   } catch (e) {}
 }
 
+function pauseMainMusic() {
+  if (mainMusicAudio && !mainMusicAudio.paused) {
+    mainMusicWasPlaying = true;
+    mainMusicAudio.pause();
+  } else {
+    mainMusicWasPlaying = false;
+  }
+}
+
+function resumeMainMusic() {
+  if (mainMusicAudio && mainMusicWasPlaying && state.audioEnabled && state.userInteracted) {
+    mainMusicAudio.play().catch(() => {});
+    mainMusicWasPlaying = false;
+  }
+}
+
+function playDangerSound() {
+  if (!state.audioEnabled) return;
+  if (!state.userInteracted) return;
+  if (dangerSoundCooldown) return;
+  // Don't play if already playing
+  if (dangerSoundAudio && !dangerSoundAudio.paused) return;
+
+  dangerSoundCooldown = true;
+
+  // Pause main music when danger sound plays
+  pauseMainMusic();
+
+  if (dangerSoundAudio) {
+    dangerSoundAudio.pause();
+    dangerSoundAudio.currentTime = 0;
+  }
+
+  dangerSoundAudio = new Audio("assets/sounds/DangerNotifSound.wav");
+  dangerSoundAudio.volume = 0.5;
+
+  dangerSoundAudio.addEventListener('ended', function() {
+    // Resume main music when danger sound ends
+    resumeMainMusic();
+    dangerSoundCooldown = false;
+  });
+
+  dangerSoundAudio.play().catch(() => {
+    dangerSoundCooldown = false;
+  });
+}
+
 function stopAllAudio() {
   if (mainMusicAudio) mainMusicAudio.pause();
+  if (dangerSoundAudio) {
+    dangerSoundAudio.pause();
+    dangerSoundAudio.currentTime = 0;
+  }
   if (heartbeatInterval) clearInterval(heartbeatInterval);
   if (droneGain) droneGain.gain.setValueAtTime(0, audioCtx.currentTime);
   if (staticGain) staticGain.gain.setValueAtTime(0, audioCtx.currentTime);
@@ -1068,13 +1124,14 @@ function getSceneText(scene) {
 function choosePath(choice) {
   applyEffects(choice.effects);
   state.history.push(choice.label);
-  const previousScene = state.currentScene;
+  state.previousScene = state.currentScene;
   state.currentScene = choice.next;
   checkSceneItemDiscovery(choice.next);
 
   const criticalScenes = ["basement", "double", "stairwell"];
-  if (criticalScenes.includes(state.currentScene) && !criticalScenes.includes(previousScene)) {
+  if (criticalScenes.includes(state.currentScene) && !criticalScenes.includes(state.previousScene)) {
     triggerHallucination();
+    playDangerSound();
   }
 
   renderScene();
@@ -1117,6 +1174,7 @@ function applyEffects(effects = {}) {
     playStatSound(effects.power > 0);
     if (state.previousPower > 1 && state.power <= 1 && effects.power < 0) {
       triggerHallucination();
+      playDangerSound();
     }
   }
   if (effects.trust) {
@@ -1134,6 +1192,7 @@ function applyEffects(effects = {}) {
       playStatSound(false);
       if (state.insanity >= 2) {
         triggerHallucination();
+        playDangerSound();
       }
     }
   }
@@ -1153,6 +1212,7 @@ function applyEffects(effects = {}) {
 
 function resetGame() {
   state.currentScene = "start";
+  state.previousScene = "start";
   state.power = 3;
   state.trust = 1;
   state.clue = 0;
@@ -1168,6 +1228,8 @@ function resetGame() {
   state.previousPower = 3;
 
   stopAllAudio();
+  dangerSoundCooldown = false;
+  mainMusicWasPlaying = false;
   if (state.audioEnabled && state.userInteracted) {
     playMainMusic();
   }
@@ -1179,6 +1241,7 @@ function resetGame() {
 function saveAutoState() {
   const saveData = {
     currentScene: state.currentScene,
+    previousScene: state.previousScene,
     power: state.power,
     trust: state.trust,
     clue: state.clue,
@@ -1510,6 +1573,7 @@ window.saveToSlot = function (slot) {
   playClickSound();
   const saveData = {
     currentScene: state.currentScene,
+    previousScene: state.previousScene,
     power: state.power,
     trust: state.trust,
     clue: state.clue,
@@ -1534,6 +1598,7 @@ window.loadFromSlot = function (slot) {
   if (rawData) {
     const data = JSON.parse(rawData);
     state.currentScene = data.currentScene;
+    state.previousScene = data.previousScene || data.currentScene;
     state.power = data.power;
     state.trust = data.trust;
     state.clue = data.clue;
@@ -1614,6 +1679,9 @@ function toggleAudioState() {
     playMainMusic();
   } else {
     stopAllAudio();
+    // Reset danger sound state
+    dangerSoundCooldown = false;
+    mainMusicWasPlaying = false;
   }
 
   if (!gameModal.classList.contains("is-hidden")) {
@@ -1805,6 +1873,7 @@ if (autoDataRaw) {
     const autoData = JSON.parse(autoDataRaw);
     if (autoData && scenes[autoData.currentScene]) {
       state.currentScene = autoData.currentScene;
+      state.previousScene = autoData.previousScene || autoData.currentScene;
       state.power = autoData.power ?? 3;
       state.trust = autoData.trust ?? 1;
       state.clue = autoData.clue ?? 0;
